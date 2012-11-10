@@ -1,0 +1,13 @@
+PREPARING:
+
+* Register an account on a pod
+* set up my_settings in the SCRIPT (base-url is usually the domain or subdomain with a trailing /)
+* delete all aspects (or not)
+* create an aspect "users"
+* create an aspect "admins"
+* subscribe your regular Diaspora-account in "admins"
+* got to base-url/user/edit (Username → Settings) in your Browser
+* uncheck "Show Community Spotlight in Stream?" and save
+* check "Automatically follow back if someone follows you", choose "users" and save
+* set up a userprofile
+* done
