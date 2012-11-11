@@ -162,7 +162,7 @@ proc send_post { my_command } {
 	set my_postcontent [join [lrange [split [lindex $my_command 5] "\n"] 1 end] "\n"]
 	set send_public [string first "public" $my_subcommand]
 	set target_aspect [string range [lindex [regexp -inline -- "\\$groupprefix\\w+" $my_subcommand] 0] 1 end]
-	set post_header "!\[avatar\]([lindex $my_command 15]) \[[lindex $my_command 11]\]([lindex $my_command 13]) to $groupprefix$target_aspect"
+	set post_header "!\[avatar\]([lindex $my_command 15]) @\{[lindex $my_command 11] ; [lindex $my_command 13]\} to $groupprefix\*$target_aspect\*"
 	set my_postcontent "$post_header \n\n$my_postcontent"
 	#set group_exists 0
 	#set aspect_id 0
@@ -210,7 +210,7 @@ proc subscribe { my_command } {
 	#	}
 	#}
 	set aspect_id [get_aspectid $new_aspectname]
-	if ($aspect_id) { set group_exists 1 } { else set group_exists 0 }
+	if ($aspect_id) { set group_exists 1 } else { set group_exists 0 }
 	if { $new_aspectname == "create"      } { set group_exists 2 }
 	if { $new_aspectname == "found"       } { set group_exists 2 }
 	if { $new_aspectname == "subscribe"   } { set group_exists 2 }
