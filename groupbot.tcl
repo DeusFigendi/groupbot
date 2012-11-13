@@ -1,3 +1,22 @@
+#  Groupbots phantomjs-modules provide several functions to do stuff
+#  with an diaspora account. This file provides the groupbots
+#  functionality itself.
+#  Copyright (C) 2012  Deus Figendi
+#
+#   Groupbot is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   Groupbot is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
 #######################################################################
 ##                                                                   ##
 ##                            SETTINGS                               ##
@@ -236,10 +255,19 @@ proc subscribe { my_command } {
 			puts "$phantombin change_useraspect.js -d Ŋ Ŋ N N -a $aspect_id -m DEL -u $sender_id"
 			set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $aspect_id "-m" "DEL" "-u" $sender_id] "Ŋ"]
 		} elseif {$subscribemode == "ADD"} {
-			puts "$phantombin change_useraspect.js -d Ŋ Ŋ N N -a $aspect_id -m ADD -u $sender_id"
-			set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $aspect_id "-m" "ADD" "-u" $sender_id] "Ŋ"]
+			set my_groupinfo [get_aspectinfo $new_aspectname]
+			set invitation_needed [lindex [lindex $my_groupinfo 5] 0]
+			set invitation_given 1
+			if { $invitation_needed && ! $invitation_given } { set subscription_allowed 0 } else { set subscription_allowed 1 }
+			if ($subscription_allowed) {
+				puts "$phantombin change_useraspect.js -d Ŋ Ŋ N N -a $aspect_id -m ADD -u $sender_id"
+				set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $aspect_id "-m" "ADD" "-u" $sender_id] "Ŋ"]
+			} else {
+				puts "Invitation needed but not given..."
+				set adduser_answer -20
+			}
 		} else {
-			set adduser_answer -500
+			set adduser_answer -10
 		}
 		if {$adduser_answer == "201" || $adduser_answer == "200"} {
 			if {$subscribemode == "ADD"} {
@@ -575,7 +603,11 @@ proc main {} {
 		exit
 	}
 }
-
+puts "Groupbot  Copyright (C) 2012  Deus Figendi"
+puts "This program comes with ABSOLUTELY NO WARRANTY;"
+puts "This is free software, and you are welcome to redistribute it"
+puts "under certain conditions;"
+puts " "
 main
 
 vwait null

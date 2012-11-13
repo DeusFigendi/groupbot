@@ -1,13 +1,56 @@
-PREPARING:
+These are - more or less - two projects:
+1. all the .js files are javascript files written for phantomjs to do
+    several stuff with Diaspora. It can read the stream or aspects or
+        hashtags or mentions, it can post postings or comment, it can
+                    read the list of aspects and the users in it etc.
+    To use these you'd need phantomjs http://phantomjs.org/ to see
+        what the modules do start 'em with phantomjs and use the ?
+                                           parameter. For example:
+    ./phantomjs post_comment.js ?
+    It should be possible to build many diffrent diaspora-clients
+     based on this phantomjs modules. Yea it's not fast, yes it's
+         not complete or perfect. But it's usable and improvable.
+         
+2. the groupbot.tcl is a TCL script that provides a group
+    functionality for diaspora. It works pretty much like
+      a mailinglists mail deliverer. So it takes postings
+          from users and "delivers" (reposts) them to all
+            other members of a group. Users can subsribe,
+             unsubscribe, manage and found groups, and of
+                      corse they can send posts to those.
+    Groupbot.tcl uses the js-files to comunicate with diaspora so
+    as long as the output of these files keep similar to now they
+             can be improved, replaced or - of corse - be forked.
+             
+## REQUIREMENTS:
 
-* Register an account on a pod
-* set up my_settings in the SCRIPT (base-url is usually the domain or subdomain with a trailing /)
-* delete all aspects (or not)
+What you'll need to setup a groupbot:
+
+* A diaspora account the bot uses
+* phantomjs (http://phantomjs.org/)
+* the files in this repository
+* a TCL interpreter
+
+## PREPARATION AND START:
+
+* Register the diaspora-account for the bot manually (the script doesn't do this stuff automaticly)
+* delete all aspects of the acount (using your browser!)
 * create an aspect "users"
-* create an aspect "admins"
-* subscribe your regular Diaspora-account in "admins"
+* create an aspect "admins" and add your own diaspora-account (not used yet)
 * got to base-url/user/edit (Username → Settings) in your Browser
 * uncheck "Show Community Spotlight in Stream?" and save
 * check "Automatically follow back if someone follows you", choose "users" and save
 * set up a userprofile
-* done
+* set up my_settings in generic_functions.js and delete or comment the injection of override_logindata.js or setup my_settings in override_logindata.js
+* set up phantombin in groupbot.tcl. In my case I just threw the js and tcl files into ~/phantomjs/bin/ and used to use "./phantomjs" but if you place your phantomjs otherwheres e.g. in /opt/phantomjs/ you'd have to setup "/opt/phantomjs/bin/phantomjs"
+* you CAN also setup the groupprefix and the checkfrequency in groupbot.tcl it's explained there.
+* start the bot using:
+  tclsh groupbot.tcl
+  or (as I do)
+  /opt/ActiveTcl-8.5/bin/tclsh8.5 groupbot.tcl
+  or
+  /opt/ActiveTcl-8.5/bin/tclsh8.5 /home/username/diasporabots/groupbot/groupbot.tcl
+  or somethin like that.
+* add the bot to one of your aspects (or better create a bot-aspect)
+* write a posting mentioning the bot (@-command) with your diaspora-account AND use the word "help" in the first line.
+* have fun
