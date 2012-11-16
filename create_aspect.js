@@ -62,6 +62,7 @@ page.onLoadFinished = function () {
 	var pagecontent = page.content;
 	var pageadress  = getPageuri(page);
 	if (my_settings.verboselevel > 0) {
+		//console.log(pagecontent);
 		console.log(pagetitle);
 		console.log(pageadress);
 	}
@@ -74,10 +75,12 @@ page.onLoadFinished = function () {
 	} else if (pageadress.match(/\/stream\/?$/)){
 		if (my_settings.verboselevel > 0) {
 			console.log('stream page, joining aspect-creation');
-		}		
+		}
 		page.open(my_settings.base_url+'aspects/new');		
 	} else if (pageadress.match(/\/aspects\/new\/?$/)){
-		
+		//if (my_settings.verboselevel > 0) {
+//			console.log('creating aspect '+my_aspect);
+		//}
 		page.evaluate(function(my_aspect) {
 			document.getElementById('aspect_name').value = my_aspect;
 			document.getElementById('aspect_name').form.submit();			
@@ -86,6 +89,10 @@ page.onLoadFinished = function () {
 	} else if (pageadress.match(/\/contacts\?a_id\=\d+$/)){
 		console.log(pageadress.match(/\/contacts\?a_id\=(\d+)$/)[1]);
 		phantom.exit();
+	} else {
+		if (my_settings.verboselevel > 0) {
+			console.log('unknown state');
+		}
 	}
 };
 
