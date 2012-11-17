@@ -272,21 +272,37 @@ proc add_user_to_group {aspectlist my_user {add_admin 0} } {
 	return $aspectlist
 }
 
-proc get_aspectinfo {aspect} {
+proc get_grouparray {aspect} {
 	if {[string is digit $aspect]} {
+		set aspect_id $aspect
 		if {[file exists "/aspects/$aspect"]} {
 			set tempfile [open "/aspects/$aspect" r]
-			set aspect [read $tempfile]
+			set aspect_name [read $tempfile]
 			close $tempfile
+		} else {
+			set aspect_name 0
 		}
 	}
-	if {[file exists "./aspects/$aspect"]} {
-		set aspectfile [open "./aspects/$aspect" r]
+	if {[file exists "./aspects/$aspect_name"]} {
+		set aspectfile [open "./aspects/$aspect_name" r]
 		set aspectlist [read $aspectfile]
 		close $aspectfile
 		return $aspectlist
 	} else {
-		return 0
+		global phantombin
+		set aspect_adminid [get_aspectid "$aspect_name\_a"]
+		set getaspect_answer1 [exec $phantombin "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_id]
+		set getaspect_answer2 [exec $phantombin "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_adminid]
+		set admin_list [list]
+		set users_list [list]
+		foreach { h_ i_ n_ a_ g_ } $getaspect_answer1 {
+			lappend admin_list [list $i_ $g_ $n_ $h_ $a_]
+		}
+		foreach { h_ i_ n_ a_ g_ } $getaspect_answer2 {
+			lappend users_list [list $i_ $g_ $n_ $h_ $a_]
+		}
+		set aspectlist [list $aspect_name $aspect_id "desc" $admin_list $users_list [list 0 0 0]]
+		return $aspectlist
 	}
 }
 
@@ -447,7 +463,7 @@ proc subscribe { my_command } {
 			puts "$phantombin change_useraspect.js -d Ŋ Ŋ N N -a $aspect_id -m DEL -u $sender_id"
 			set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $aspect_id "-m" "DEL" "-u" $sender_id] "Ŋ"]
 		} elseif {$subscribemode == "ADD"} {
-			set my_groupinfo [get_aspectinfo $new_aspectname]
+			set my_groupinfo [get_grouparray $new_aspectname]
 			set invitation_needed [lindex [lindex $my_groupinfo 5] 0]
 			set invitation_given 1
 			if { $invitation_needed && ! $invitation_given } { set subscription_allowed 0 } else { set subscription_allowed 1 }
@@ -466,13 +482,13 @@ proc subscribe { my_command } {
 				puts "User added"
 				set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "## Done, \\n\\n you just subscribed $groupprefix$new_aspectname"]
 				set founder_array [list [lindex $my_command 7] [lindex $my_command 9] [lindex $my_command 11] [lindex $my_command 13] [lindex $my_command 15]]
-				set my_groupinfo [get_aspectinfo $new_aspectname]
+				set my_groupinfo [get_grouparray $new_aspectname]
 				set my_groupinfo [add_user_to_group $my_groupinfo $founder_array]
 				save_aspectinfo $new_aspectname $my_groupinfo
 			} elseif {$subscribemode == "DEL"} {
 				puts "User removed"
 				set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "## Done, \\n\\n you just unsubscribed $groupprefix$new_aspectname"]
-				set my_groupinfo [get_aspectinfo $new_aspectname]
+				set my_groupinfo [get_grouparray $new_aspectname]
 				puts "my_groupinfo $my_groupinfo"
 				set my_groupid [lindex $my_groupinfo 1]
 				puts "my_groupid $my_groupid"
@@ -527,7 +543,7 @@ proc set_prefference {my_command } {
 	set my_aspectid [get_aspectid $my_aspectname]
 	if {$my_aspectid == "" } { set my_aspectid 0 }
 	if {$my_aspectid} {
-		set my_aspectinfo [get_aspectinfo $my_aspectname]
+		set my_aspectinfo [get_grouparray $my_aspectname]
 		#aspect/group exists, check if the user is admin...
 		set is_admin 0
 		for {set i 0} {$i < [llength [lindex $my_aspectinfo 3]]} { incr i} {
