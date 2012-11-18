@@ -121,23 +121,29 @@ page.onLoadFinished = function () {
 			var return_object = new Array();
 			var temp_object = new Object();
 			var user_divs = document.getElementById('people_stream');
-			user_divs = user_divs.getElementsByTagName('div');
-			for (var i = 0; i < user_divs.length; i++) {
-				if (user_divs[i].id.match(/^\d+$/)) {
-					temp_object = new Object();
-					temp_object.lid = user_divs[i].id;
-					temp_object.guid = user_divs[i].getElementsByTagName('div')[1].getElementsByTagName('div')[0].getElementsByTagName('a')[0].href.match(/\w+$/);
-					temp_object.avatar = user_divs[i].getElementsByTagName('div')[1].getElementsByTagName('div')[0].getElementsByTagName('a')[0].getElementsByTagName('img')[0].src;
-					temp_object.nick = user_divs[i].getElementsByTagName('div')[1].getElementsByTagName('div')[0].getElementsByTagName('a')[0].getElementsByTagName('img')[0].alt;
-					temp_object.d_id = user_divs[i].getElementsByTagName('div')[1].getElementsByTagName('div')[1].getElementsByTagName('div')[0].firstChild.data;
+			if (user_divs != null) {
+				user_divs = user_divs.getElementsByTagName('div');
+				for (var i = 0; i < user_divs.length; i++) {
+					if (user_divs[i].id.match(/^\d+$/)) {
+						temp_object = new Object();
+						temp_object.lid = user_divs[i].id;
+						temp_object.guid = user_divs[i].getElementsByTagName('div')[1].getElementsByTagName('div')[0].getElementsByTagName('a')[0].href.match(/\w+$/);
+						temp_object.avatar = user_divs[i].getElementsByTagName('div')[1].getElementsByTagName('div')[0].getElementsByTagName('a')[0].getElementsByTagName('img')[0].src;
+						temp_object.nick = user_divs[i].getElementsByTagName('div')[1].getElementsByTagName('div')[0].getElementsByTagName('a')[0].getElementsByTagName('img')[0].alt;
+						temp_object.d_id = user_divs[i].getElementsByTagName('div')[1].getElementsByTagName('div')[1].getElementsByTagName('div')[0].firstChild.data;
 					
-					return_object.push(temp_object);
+						return_object.push(temp_object);
+					}
 				}
 			}
 			return (return_object);
 		});
 		if (my_settings.verboselevel > 0) {
 			console.log('found '+user_array.length+' users in that aspect:');
+		}
+		if (user_array.length <= 0) {
+			console.log('-1');
+			phantom.exit();
 		}
 		var outputstring = '';
 		for (var i = 0; i < user_array.length; i++) {

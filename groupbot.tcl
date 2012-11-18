@@ -46,9 +46,170 @@ set groupprefix "!"
 ## terminates after doing his jobs. That might be usefull for        ##
 ## testing or use with cron, anachron etc.                           ##
 #######################################################################
-set checkfrequency 15000
+set checkfrequency 20000
 #######################################################################
 
+
+proc remove_user_from_group2 { group_value user_value {remove_from 0}} {
+	##removes an user off a group… on the pod AND local
+	## group_value might be the (aspect)id or the name of the group
+	## user_value might be the (global)id or the diaspora-handle OR (unusual) the Name of the user OR (great) a whole user-array
+	## remove_from is 0 for all, 1 for admin only, 2 for subscriber only (unusual)
+	
+	global phantombin
+	#step1 get group-id and group-name
+	set group_value [string trim $group_value]
+	if {[regexp {^\d+$} $group_value]} {
+		##group_value seems to be a group-id, check if there's a file
+		if {[file exists "./aspects/$group_value"]} {
+			##there's a file with that ID, it should contain the groups name...
+			set group_file [open "./aspects/$group_value" r]
+			set group_name [string trim [read $group_file]]
+			set group_id $group_value
+			close $group_file
+		} else {
+			##there is no such file, let's get it from the pod
+			set aspect_list [exec $phantombin "get_aspects.js" "-d" "\{" "\} " "Ŋ" "ŋ"]
+			set i 0
+			while { [lindex $aspect_list $i] != $group_value && $i < [llength $aspect_list]} {
+				##searching for that ID in the aspect-list…
+				incr i
+			}
+			if { $i < [llength $aspect_list]} {
+				set group_name [string trim [lindex $aspect_list [expr $i + 1]]]
+				set group_id $group_value
+			} else {
+				##could not find the groupname, maybe group does not exist?
+				set group_name -1
+				set group_id -1
+			}
+		}
+	} else {
+		##group_value seems to be a groupname…
+		if {[file exists "./aspects/$group_value"]} {
+			##there's a file with that ID, it should contain the groups name...
+			set group_file [open "./aspects/$group_value" r]
+			set group_array [string trim [read $group_file]]
+			set group_name $group_value
+			set group_id [lindex $group_array 1]
+			close $group_file
+		} else {
+			set group_name $group_value
+			set group_id [get_aspectid $group_name]
+		}
+	}
+	## okay, at this point we SHOULD have a group_name and a group_id
+	
+	if {$group_id > 0} {
+		##group was found, lets search for the user
+		## first hope: The user_value is an user-array allready, in that case, nothing's to do
+		## a user-array is always 5 items long...
+		if {[llength $user_value] == 5} {
+			##okay, the length is correct but it might still be the displayed name of the user.
+			##let's check if the fields are correct... 0=id 1=guid 2=name 3=handle 4=avatar
+			if { [regexp {^\d+$} [lindex $user_value 0]] && [regexp {^\w+$} [lindex $user_value 1]] && [regexp {^\w+\@[[:alnum:].]+$} [lindex $user_value 3] ] } {
+				set user_array $user_value
+			}
+		}
+			
+		if { [info exists user_array] <= 0} {
+			##there is no user_array, let's check if it can be found somwhere in the groups users from file...				
+			if {[file exists "./aspects/$group_name"]} {
+				## there is a file with that groupname...
+				set group_file [open "./aspects/$group_name" r]
+				set group_array [read $group_file]
+				close $group_file
+				for { set i 0 } { $i < [llength [lindex $group_array 3]]} {incr i} {
+					if {[lindex $group_array 3 $i 0] == $user_value ||[lindex $group_array 3 $i 1] == $user_value ||[lindex $group_array 3 $i 3] == $user_value} {
+						set user_array [lindex $group_array 3 $i]
+					}
+					if {[info exists user_array] <= 0 && [lindex $group_array 3 $i 2] == $user_value} {
+						set user_array [lindex $group_array 3 $i]
+					}
+				}
+				for { set i 0 } { $i < [llength [lindex $group_array 4]]} {incr i} {
+					if {[lindex $group_array 4 $i 0] == $user_value ||[lindex $group_array 4 $i 1] == $user_value ||[lindex $group_array 4 $i 3] == $user_value} {
+						set user_array [lindex $group_array 4 $i]
+					}
+					if {[info exists user_array] <= 0 && [lindex $group_array 4 $i 2] == $user_value} {
+						set user_array [lindex $group_array 4 $i]
+					}
+				}
+			}				
+		}
+		if { [info exists user_array] <= 0} {
+			## so there was no user_array given to the proc
+			##    the user was not found in file
+			## let's just search for it on the pod.
+			set user_search_answer [split [exec $phantombin "get_user.js" "-d" "Ŋ" "Ŋ" "N" "N" "-u" $my_user] "Ŋ"]
+			if {[llength $user_search_answer] >= 5} {			
+				set user_array [list [lindex $user_search_answer 1] [lindex $user_search_answer 3] [lindex $user_search_answer 5] [lindex $user_search_answer 7] [lindex $user_search_answer 9]]
+			}				
+		}
+		if { [info exists user_array]} {
+			##okay, in some way we got an user_array, we have a groupname and a groupid, now we can add it to the groupfile (if it exists) and to the aspect(s)
+			## jejj we can remove the user XD
+			if { $remove_from == 0 || $remove_from == 2 } {
+				##remove as subscriber				
+				if {[file exists "./aspects/$group_value"]} {
+					set group_file [open "./aspects/$group_value" r+]
+					set group_array [string trim [read $group_file]]					
+					set users_list [lindex $group_array 4]
+					set i [llength $users_list]
+					while {$i >0} {
+						set i [expr $i - 1]
+						## okay if the guid or the handle fits remove the user... other stuff might also be possible (e.g. Name AND user-id)
+						if {[lindex $users_list $i 1] == [lindex $user_array 1] || [lindex $users_list $i 3] == [lindex $user_array 3] } {
+							set users_list [lreplace $users_list $i $i]
+						}
+					}
+					set group_array [lreplace $group_array 4 4 $users_list]
+					puts $group_file $group_array
+					close $group_file					
+				}
+				set deluser_answer1 [exec $phantombin "change_useraspect.js" "-d" "\{" "\} " "\\\{" "\\\}" "-a" $group_id "-m" "DEL" "-u" [lindex $user_array 0]]				
+			} else {
+				set deluser_answer1 200
+			}
+			if { $remove_from == 0 || $remove_from == 1 } {
+				##remove as admin
+				if {[file exists "./aspects/$group_value"]} {
+					set group_file [open "./aspects/$group_value" r+]
+					set group_array [string trim [read $group_file]]					
+					set users_list [lindex $group_array 3]
+					set i [llength $users_list]
+					while {$i >0} {
+						set i [expr $i - 1]
+						## okay if the guid or the handle fits remove the user... other stuff might also be possible (e.g. Name AND user-id)
+						if {[lindex $users_list $i 1] == [lindex $user_array 1] || [lindex $users_list $i 3] == [lindex $user_array 3] } {
+							set users_list [lreplace $users_list $i $i]
+						}
+					}
+					set group_array [lreplace $group_array 3 3 $users_list]
+					puts $group_file $group_array
+					close $group_file					
+				}
+				
+				set deluser_answer2 [exec $phantombin "change_useraspect.js" "-d" "\{" "\} " "\\\{" "\\\}" "-a" [get_aspectid "$group_name\_a"] "-m" "DEL" "-u" [lindex $user_array 0]]				
+			} else {
+				set deluser_answer2 200
+			}
+		} else {
+				set deluser_answer1 500
+				set deluser_answer2 500
+		}
+		if { $deluser_answer1 == 200 && $deluser_answer2 == 200 } {
+			## everything worked fine
+			return 1
+		} else {
+			## group was found but deleting the user failed in some way.
+			return -10
+		}
+	} else {
+		## group not found, didn't try to fetch user
+		return -20
+	}
+}
 
 proc remove_user_from_group { aspectlist user_key user_value {remove_admin 0}} {
 	if {$remove_admin} {
@@ -292,17 +453,29 @@ proc get_grouparray {aspect} {
 		global phantombin
 		set aspect_adminid [get_aspectid "$aspect_name\_a"]
 		set getaspect_answer1 [exec $phantombin "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_id]
-		set getaspect_answer2 [exec $phantombin "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_adminid]
-		set admin_list [list]
-		set users_list [list]
-		foreach { h_ i_ n_ a_ g_ } $getaspect_answer1 {
-			lappend admin_list [list $i_ $g_ $n_ $h_ $a_]
+		if {$aspect_adminid} {
+			set getaspect_answer2 [exec $phantombin "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_adminid]
+		} else {
+			set getaspect_answer2 "-1"
 		}
-		foreach { h_ i_ n_ a_ g_ } $getaspect_answer2 {
-			lappend users_list [list $i_ $g_ $n_ $h_ $a_]
+		if {$getaspect_answer1 != "-1"} {
+			set admin_list [list]
+			set users_list [list]
+			foreach { h_ i_ n_ a_ g_ } $getaspect_answer1 {
+				lappend users_list [list $i_ $g_ $n_ $h_ $a_]
+			}
+			if {$getaspect_answer2 != "-1"} {
+				foreach { h_ i_ n_ a_ g_ } $getaspect_answer2 {
+					lappend admin_list [list $i_ $g_ $n_ $h_ $a_]
+				}
+			} else {
+				lappend admin_list [lindex $users_list 0]
+			}
+			set aspectlist [list $aspect_name $aspect_id "desc" $admin_list $users_list [list 0 0 0]]
+			return $aspectlist
+		} else {
+			return 0
 		}
-		set aspectlist [list $aspect_name $aspect_id "desc" $admin_list $users_list [list 0 0 0]]
-		return $aspectlist
 	}
 }
 
@@ -380,6 +553,44 @@ proc send_post { my_command } {
 		puts "aspect_id is empty, didn't sent"
 	}
 	puts "$my_postcontent \n\n $aspect_id"
+}
+
+proc unsubscribe_command { my_command } {
+	puts "unsubscription..."
+	global phantombin
+	global groupprefix
+	set my_subcommand [lindex [split [lindex $my_command 5] "\n"] 0]
+	set group_name [string range [lindex [regexp -inline -- "\\$groupprefix\\w+" $my_subcommand] 0] 1 end]
+	if { $group_name == "create"       ||
+	     $group_name == "found"        ||
+	     $group_name == "subscribe"    ||
+	     $group_name == "enter"        ||
+	     $group_name == "unsubscribe"  ||
+	     $group_name == "leave"        ||
+	     $group_name == "set"          ||
+	     $group_name == "setup"        ||
+	     [regexp {^\d+$} $group_name] ||
+	     [regexp {^\w+_a$} $group_name] } {
+			#aspectname fits a keyword, abort!
+			set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "You can't leave $groupprefix$group_name because that is no valid groupname."]			
+	} else {
+		## The groupname is valid...
+		set sender_array [list [lindex $my_command 7] [lindex $my_command 9] [lindex $my_command 11] [lindex $my_command 13] [lindex $my_command 15]]
+		set subscriber_answer [remove_user_from_group2 $group_name $sender_array]
+		if {$subscriber_answer > 0} {
+			puts "User removed"
+			set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "## Done, \\n\\n you just unsubscribed $groupprefix$group_name"]
+		} elseif {$subscriber_answer == -10} {
+			puts "User is not identified"
+			set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "Erm... I'm not sure if you're totally removed. (error: unsubscribe $subscriber_answer\)"]
+		} elseif {$subscriber_answer == -20} {
+			puts "Group is not identified"
+			set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "Sorry I cannot find the group $groupprefix$group_name you specified."]
+		} else {
+			puts "unknown subscription error $subscriber_answer"
+			set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "Erm, for some unknown reason I could not remove you off $groupprefix$group_name (error: unsubscribe impossible error # $subscriber_answer\)"]
+		}
+	}
 }
 
 proc subscribe_command { my_command } {
@@ -784,7 +995,7 @@ proc main {} {
 		} elseif { [regexp -nocase {(^|\s)(unsubscribe|leave)(\s|$)} $my_subcommand] } {
 			#Unsubscription
 			if {[file exists "./done/[lindex $my_command 3]"] == 0} {
-				subscribe $my_command
+				unsubscribe_command $my_command
 				set done_file [open "./done/[lindex $my_command 3]" w]
 				puts $done_file "$my_command \n\nunsubscribed"
 				close $done_file
