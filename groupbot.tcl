@@ -569,7 +569,7 @@ proc get_aspectid { aspectname {source_type 0} } {
 	##             0 "any" (podinformation preffered)
 	##             1 "pod"
 	##             2 "file"
-	if {$source_type 1= 2} {
+	if {$source_type != 2} {
 		global phantombin
 		set aspect_list [split [exec $phantombin "get_aspects.js" "-d" "Ŋ" "Ŋ" "N" "N"] "Ŋ"]
 		foreach {nothing1 a_id nothing2 a_name} $aspect_list {
@@ -578,7 +578,7 @@ proc get_aspectid { aspectname {source_type 0} } {
 			}
 		}
 	}
-	if {$source_type 1= 1} {
+	if {$source_type != 1} {
 		## maybe should check if asked for an admin-aspect
 		if {[file exists "./aspects/$aspectname"]} {
 			set groupfile [open "./aspects/$aspectname" r]
