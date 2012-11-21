@@ -91,7 +91,7 @@ proc remove_user_from_group2 { group_value user_value {remove_from 0}} {
 			set group_file [open "./aspects/$group_value" r]
 			set group_array [string trim [read $group_file]]
 			set group_name $group_value
-			set group_id [lindex $group_array 1]
+			set group_id [lindex $group_array 1 0]
 			close $group_file
 		} else {
 			set group_name $group_value
@@ -107,7 +107,7 @@ proc remove_user_from_group2 { group_value user_value {remove_from 0}} {
 		if {[llength $user_value] == 5} {
 			##okay, the length is correct but it might still be the displayed name of the user.
 			##let's check if the fields are correct... 0=id 1=guid 2=name 3=handle 4=avatar
-			if { [regexp {^\d+$} [lindex $user_value 0]] && [regexp {^\w+$} [lindex $user_value 1]] && [regexp {^\w+\@[[:alnum:].]+$} [lindex $user_value 3] ] } {
+			if { [regexp {^\d+$} [lindex $user_value 0]] && [regexp {^\w+$} [lindex $user_value 1 0]] && [regexp {^\w+\@[[:alnum:].]+$} [lindex $user_value 3] ] } {
 				set user_array $user_value
 			}
 		}
@@ -152,8 +152,9 @@ proc remove_user_from_group2 { group_value user_value {remove_from 0}} {
 			if { $remove_from == 0 || $remove_from == 2 } {
 				##remove as subscriber				
 				if {[file exists "./aspects/$group_value"]} {
-					set group_file [open "./aspects/$group_value" r+]
+					set group_file [open "./aspects/$group_value" r]
 					set group_array [string trim [read $group_file]]					
+					close $group_file
 					set users_list [lindex $group_array 4]
 					set i [llength $users_list]
 					while {$i >0} {
@@ -164,6 +165,7 @@ proc remove_user_from_group2 { group_value user_value {remove_from 0}} {
 						}
 					}
 					set group_array [lreplace $group_array 4 4 $users_list]
+					set group_file [open "./aspects/$group_value" w]
 					puts $group_file $group_array
 					close $group_file					
 				}
@@ -174,8 +176,9 @@ proc remove_user_from_group2 { group_value user_value {remove_from 0}} {
 			if { $remove_from == 0 || $remove_from == 1 } {
 				##remove as admin
 				if {[file exists "./aspects/$group_value"]} {
-					set group_file [open "./aspects/$group_value" r+]
+					set group_file [open "./aspects/$group_value" r]
 					set group_array [string trim [read $group_file]]					
+					close $group_file				
 					set users_list [lindex $group_array 3]
 					set i [llength $users_list]
 					while {$i >0} {
@@ -186,11 +189,12 @@ proc remove_user_from_group2 { group_value user_value {remove_from 0}} {
 						}
 					}
 					set group_array [lreplace $group_array 3 3 $users_list]
+					set group_file [open "./aspects/$group_value" w]
 					puts $group_file $group_array
 					close $group_file					
 				}
 				
-				set deluser_answer2 [exec $phantombin "change_useraspect.js" "-d" "\{" "\} " "\\\{" "\\\}" "-a" [get_aspectid "$group_name\_a"] "-m" "DEL" "-u" [lindex $user_array 0]]				
+				set deluser_answer2 [exec $phantombin "change_useraspect.js" "-d" "\{" "\} " "\\\{" "\\\}" "-a" [get_aspectid "$group_name\_a" 1] "-m" "DEL" "-u" [lindex $user_array 0]]				
 			} else {
 				set deluser_answer2 200
 			}
@@ -209,50 +213,6 @@ proc remove_user_from_group2 { group_value user_value {remove_from 0}} {
 		## group not found, didn't try to fetch user
 		return -20
 	}
-}
-
-proc remove_user_from_group { aspectlist user_key user_value {remove_admin 0}} {
-	if {$remove_admin} {
-		set user_array [lindex $aspectlist 3]
-	} else {
-		set user_array [lindex $aspectlist 4]
-	}
-	if {$user_key == "id"} { set user_key 0
-	} elseif {$user_key == "guid"} { set user_key 1
-	} elseif {$user_key == "name"} { set user_key 2
-	} elseif {$user_key == "handle"} { set user_key 3
-	} elseif {$user_key == "did"} { set user_key 3
-	} elseif {$user_key == "d_id"} { set user_key 3
-	} elseif {$user_key == "avatar"} { set user_key 4
-	} elseif {$user_key == "image"} { set user_key 4 }
-	if {[string is digit $user_key]} {
-		if {$user_key <= 4 && $user_key >=0} {
-			for {set i [expr [llength $user_array] -1]} { $i >= 0} { set i [expr $i-1] } {
-				if {[lindex [lindex $user_array $i] $user_key] == $user_value} {
-					set user_array [lreplace $user_array $i $i]
-				}
-			}
-		}
-	}
-	puts "aspectlist: $aspectlist"
-	if {$remove_admin} {
-		set aspectlist [lreplace $aspectlist 3 3 $user_array]
-	} else {
-		set aspectlist [lreplace $aspectlist 4 4 $user_array]
-	}
-	puts "check if admins left..."
-	if {[llength [lindex $aspectlist 3]] == 0} {
-		puts "#oh-oh no admin left..."
-		
-		if {[llength [lindex $aspectlist 4]] > 0} {
-			puts "#phew, there are users left... good make the 'oldest' user an admin"
-			add_user_to_group $aspectlist [lindex [lindex $aspectlist 4] 0] 1
-		} else {
-			puts "#no admin, no user? Drop the group"
-			return "delete"
-		}
-	}
-	return $aspectlist
 }
 
 proc add_user_to_group2 {group_value user_value {add_admin 0} } {
@@ -294,7 +254,7 @@ proc add_user_to_group2 {group_value user_value {add_admin 0} } {
 			## there is a file with that groupname...
 			set group_file [open "./aspects/$group_value" r]
 			set group_array [read $group_file]
-			set group_id [lindex $group_array 1]
+			set group_id [lindex $group_array 1 0]
 			set group_name $group_value
 			close $group_file
 		} else {
@@ -322,7 +282,7 @@ proc add_user_to_group2 {group_value user_value {add_admin 0} } {
 			if {[llength $user_value] == 5} {
 				##okay, the length is correct but it might still be the displayed name of the user.
 				##let's check if the fields are correct... 0=id 1=guid 2=name 3=handle 4=avatar
-				if { [regexp {^\d+$} [lindex $user_value 0]] && [regexp {^\w+$} [lindex $user_value 1]] && [regexp {^\w+\@[[:alnum:].]+$} [lindex $user_value 3] ] } {
+				if { [regexp {^\d+$} [lindex $user_value 0]] && [regexp {^\w+$} [lindex $user_value 1 0]] && [regexp {^\w+\@[[:alnum:].]+$} [lindex $user_value 3] ] } {
 					set user_array $user_value
 				}
 			}
@@ -373,8 +333,9 @@ proc add_user_to_group2 {group_value user_value {add_admin 0} } {
 					close $group_file
 				}
 				## a groupfile surely exists, if it wasn't there it's just created.
-				set group_file [open "./aspects/$group_name" r+]
+				set group_file [open "./aspects/$group_name" r]
 				set group_array [read $group_file]
+				close $group_file
 				# check if the user allready exists
 				set user_exists_in_group 0
 				set users_array [lindex $group_array $usertype]
@@ -383,14 +344,15 @@ proc add_user_to_group2 {group_value user_value {add_admin 0} } {
 				}
 				if {$user_exists_in_group == 0} {
 					lappend users_array $user_array
+					set group_file [open "./aspects/$group_name" w]
 					set group_array [lreplace $group_array $usertype $usertype $users_array]
 					puts $group_file $group_array
+					close $group_file
 				}
-				close $group_file
 				## wrote the user to the groupfile, now add it to the aspect
 				if {$add_admin} {
 					##outch, need the admin-aspect-id to do so
-					set admin_aspect_id [get_aspectid "$group_name\_a"]
+					set admin_aspect_id [get_aspectid "$group_name\_a" 1]
 					set adduser_answer [exec $phantombin "change_useraspect.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $admin_aspect_id "-m" "ADD" "-u" [lindex $user_array 0]]
 				} else {				
 					set adduser_answer [exec $phantombin "change_useraspect.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $group_id "-m" "ADD" "-u" [lindex $user_array 0]]
@@ -406,31 +368,6 @@ proc add_user_to_group2 {group_value user_value {add_admin 0} } {
 			return -20
 		}
 	}
-}
-proc add_user_to_group {aspectlist my_user {add_admin 0} } {
-	global phantombin
-	if {$add_admin} {
-		set user_array [lindex $aspectlist 3]
-	} else {
-		set user_array [lindex $aspectlist 4]
-	}
-	if { [llength $my_user] != 5} {
-		# get user-info from pod
-		set user_search_answer [split [exec $phantombin "get_user.js" "-d" "Ŋ" "Ŋ" "N" "N" "-u" $my_user] "Ŋ"]
-		if {[llength $user_search_answer] >= 5} {			
-			set my_user [list [lindex $user_search_answer 1] [lindex $user_search_answer 3] [lindex $user_search_answer 5] [lindex $user_search_answer 7] [lindex $user_search_answer 9]]
-		}
-	}
-	if { [llength $my_user] == 5} {
-		lappend user_array $my_user
-	}
-	puts "aspectlist: $aspectlist"
-	if {$add_admin} {
-		set aspectlist [lreplace $aspectlist 3 3 $user_array]
-	} else {
-		set aspectlist [lreplace $aspectlist 4 4 $user_array]
-	}
-	return $aspectlist
 }
 
 proc get_grouparray {aspect} {
@@ -451,7 +388,7 @@ proc get_grouparray {aspect} {
 		return $aspectlist
 	} else {
 		global phantombin
-		set aspect_adminid [get_aspectid "$aspect_name\_a"]
+		set aspect_adminid [get_aspectid "$aspect_name\_a" 1]
 		set getaspect_answer1 [exec $phantombin "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_id]
 		if {$aspect_adminid} {
 			set getaspect_answer2 [exec $phantombin "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_adminid]
@@ -525,14 +462,8 @@ proc send_post { my_command } {
 	set target_aspect [string range [lindex [regexp -inline -- "\\$groupprefix\\w+" $my_subcommand] 0] 1 end]
 	set post_header "!\[avatar\]([lindex $my_command 15]) @\{[lindex $my_command 11] ; [lindex $my_command 13]\} to $groupprefix\*$target_aspect\*"
 	set my_postcontent "$post_header \n\n$my_postcontent"
-	#set group_exists 0
-	#set aspect_id 0
-	#foreach {nothing1 a_id nothing2 a_name} $aspect_list {
-	#	if { $a_name == $target_aspect } {
-	#		set group_exists 1
-	#		set aspect_id $a_id
-	#	}
-	#}
+
+
 	set aspect_id [get_aspectid $target_aspect]
 	if {$send_public >= 0}	{
 		##adding mentionts...
@@ -615,7 +546,7 @@ proc subscribe_command { my_command } {
 	} else {
 		## The groupname is valid...
 		set sender_array [list [lindex $my_command 7] [lindex $my_command 9] [lindex $my_command 11] [lindex $my_command 13] [lindex $my_command 15]]
-		set subscriber_answer [add_user_to_group2 $group_name $sender_array]
+		set subscriber_answer [add_user_to_group2 $group_name $sender_array 0]
 		if {$subscriber_answer > 0} {
 			puts "User added"
 			set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "## Done, \\n\\n you just subscribed $groupprefix$group_name"]
@@ -632,112 +563,28 @@ proc subscribe_command { my_command } {
 	}
 }
 
-proc subscribe { my_command } {
-	puts "(un)subscription..."
-	global phantombin
-	global groupprefix
-	set my_subcommand [lindex [split [lindex $my_command 5] "\n"] 0]
-	set new_aspectname [string range [lindex [regexp -inline -- "\\$groupprefix\\w+" $my_subcommand] 0] 1 end]
-	set aspect_list [split [exec $phantombin "get_aspects.js" "-d" "Ŋ" "Ŋ" "N" "N"] "Ŋ"]
-	#set group_exists 0
-	#set aspect_id 0
-	#foreach {nothing1 a_id nothing2 a_name} $aspect_list {
-	#	if { $a_name == $new_aspectname } {
-	#		set group_exists 1
-	#		set aspect_id $a_id
-	#	}
-	#}
-	set aspect_id [get_aspectid $new_aspectname]
-	if ($aspect_id) { set group_exists 1 } else { set group_exists 0 }
-	if { $new_aspectname == "create"      } { set group_exists 2 }
-	if { $new_aspectname == "found"       } { set group_exists 2 }
-	if { $new_aspectname == "subscribe"   } { set group_exists 2 }
-	if { $new_aspectname == "enter"       } { set group_exists 2 }
-	if { $new_aspectname == "unsubscribe" } { set group_exists 2 }
-	if { $new_aspectname == "leave"       } { set group_exists 2 }
-	if { $new_aspectname == "set"         } { set group_exists 2 }
-	if { $new_aspectname == "setup"       } { set group_exists 2 }
-	if { $group_exists == 0 || $group_exists == 2} {
-		if {[regexp -nocase {(^|\s)(unsubscribe|leave)(\s|$)} $my_subcommand] } {
-			set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "You can't leave $groupprefix$new_aspectname there's no such group."]
-		} elseif {[regexp -nocase {(^|\s)(subscribe|enter)(\s|$)} $my_subcommand] } {
-			set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "You can't join $groupprefix$new_aspectname there's no such group."]
-		} 
-	} elseif { $group_exists == 1 } {
-		set sender_id [lindex $my_command 7]
-		set subscribemode "NOTHING"
-		if {[regexp -nocase {(^|\s)(subscribe|enter)(\s|$)} $my_subcommand] } { set subscribemode "ADD" }
-		if {[regexp -nocase {(^|\s)(unsubscribe|leave)(\s|$)} $my_subcommand] } { set subscribemode "DEL" }
-		puts [info vars "*_id"]
-		puts $aspect_id
-		if {$subscribemode == "DEL"} {
-			puts "$phantombin change_useraspect.js -d Ŋ Ŋ N N -a $aspect_id -m DEL -u $sender_id"
-			set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $aspect_id "-m" "DEL" "-u" $sender_id] "Ŋ"]
-		} elseif {$subscribemode == "ADD"} {
-			set my_groupinfo [get_grouparray $new_aspectname]
-			set invitation_needed [lindex [lindex $my_groupinfo 5] 0]
-			set invitation_given 1
-			if { $invitation_needed && ! $invitation_given } { set subscription_allowed 0 } else { set subscription_allowed 1 }
-			if ($subscription_allowed) {
-				puts "$phantombin change_useraspect.js -d Ŋ Ŋ N N -a $aspect_id -m ADD -u $sender_id"
-				set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $aspect_id "-m" "ADD" "-u" $sender_id] "Ŋ"]
-			} else {
-				puts "Invitation needed but not given..."
-				set adduser_answer -20
-			}
-		} else {
-			set adduser_answer -10
-		}
-		if {$adduser_answer == "201" || $adduser_answer == "200"} {
-			if {$subscribemode == "ADD"} {
-				puts "User added"
-				set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "## Done, \\n\\n you just subscribed $groupprefix$new_aspectname"]
-				set founder_array [list [lindex $my_command 7] [lindex $my_command 9] [lindex $my_command 11] [lindex $my_command 13] [lindex $my_command 15]]
-				set my_groupinfo [get_grouparray $new_aspectname]
-				set my_groupinfo [add_user_to_group $my_groupinfo $founder_array]
-				save_aspectinfo $new_aspectname $my_groupinfo
-			} elseif {$subscribemode == "DEL"} {
-				puts "User removed"
-				set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "## Done, \\n\\n you just unsubscribed $groupprefix$new_aspectname"]
-				set my_groupinfo [get_grouparray $new_aspectname]
-				puts "my_groupinfo $my_groupinfo"
-				set my_groupid [lindex $my_groupinfo 1]
-				puts "my_groupid $my_groupid"
-				set my_groupinfo [remove_user_from_group $my_groupinfo "guid" [lindex $my_command 9]]
-				set my_groupinfo [remove_user_from_group $my_groupinfo "guid" [lindex $my_command 9] 1]
-				if {$my_groupinfo == "delete"} {
-					file delete "./aspects/$new_aspectname"
-					puts "\n$phantombin delete_aspect.js -a $my_groupid\n"
-					set dropaspect_answer [exec $phantombin "delete_aspect.js" "-a" $my_groupid]
-					if { $dropaspect_answer == 200 } {
-						set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "Oh, you've been the last subscriber, I deleted the group."]
-					} else {
-						puts "Could not delete group $my_groupid from server"
-					}
-				} else {
-					save_aspectinfo $new_aspectname $my_groupinfo					
-				}
-			}
-		} else {
-			puts "User wasn't $subscribemode\ed for some reason ( $adduser_answer )"
-			if  {$subscribemode == "DEL"} {
-				set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "Erm, I couldn't remove you from $groupprefix$new_aspectname for some reason. Maybe you just try again in a few minutes?"]
-			} elseif {$subscribemode == "ADD"} {
-				set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "Erm, I couldn't add you to $groupprefix$new_aspectname for some reason. Maybe you just try again in a few minutes?"]
-			}
-		}
-		
-		
-	}
-	
-}
 
-proc get_aspectid { aspectname } {
-	global phantombin
-	set aspect_list [split [exec $phantombin "get_aspects.js" "-d" "Ŋ" "Ŋ" "N" "N"] "Ŋ"]
-	foreach {nothing1 a_id nothing2 a_name} $aspect_list {
-		if { $a_name == $aspectname } {
-			return $a_id
+proc get_aspectid { aspectname {source_type 0} } {
+	## source_type:
+	##             0 "any" (podinformation preffered)
+	##             1 "pod"
+	##             2 "file"
+	if {$source_type 1= 2} {
+		global phantombin
+		set aspect_list [split [exec $phantombin "get_aspects.js" "-d" "Ŋ" "Ŋ" "N" "N"] "Ŋ"]
+		foreach {nothing1 a_id nothing2 a_name} $aspect_list {
+			if { $a_name == $aspectname } {
+				return $a_id
+			}
+		}
+	}
+	if {$source_type 1= 1} {
+		## maybe should check if asked for an admin-aspect
+		if {[file exists "./aspects/$aspectname"]} {
+			set groupfile [open "./aspects/$aspectname" r]
+			set group_array [read $groupfile]
+			close $groupfile
+			return [lindex $group_array 1 0]
 		}
 	}
 	return 0
@@ -795,18 +642,19 @@ proc set_prefference {my_command } {
 			}
 			if {[regexp -nocase {(^|\s)(admin)\s(\w+@[\w\.\-]+)(\s|$)} $my_subcommand]} {
 				regexp -nocase {(^|\s)(admin)\s(\w+@[\w\.\-]+)(\s|$)} $my_subcommand temp0 temp1 temp2 new_admin_handle temp3
-				set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $my_aspectid "-m" "ADD" "-u" [lindex [lindex [lindex $my_aspectinfo 3] end] 0]] "Ŋ"]
-				set getaspectid_answer [split [exec $phantombin "get_aspects.js" "-d" "Ŋ" "Ŋ" "N" "N"] "Ŋ"]
-				set i 0
-				while { [lindex $getaspectid_answer $i] != "$my_aspectname\_a" && $i < [llength $getaspectid_answer]} { incr i }					 
-				if { $i < [llength $getaspectid_answer] } {
-					set my_adminaspectid [lindex $getaspectid_answer [expr $i - 2]]
-					set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $my_adminaspectid "-m" "ADD" "-u" [lindex [lindex [lindex $my_aspectinfo 3] end] 0]] "Ŋ"]
-					set my_aspectinfo [add_user_to_group $my_aspectinfo $new_admin_handle 1]
-					set outputtext "$outputtext\\n* added [lindex [lindex [lindex $my_aspectinfo 3] end] 2] as an admin"
-				} else {
-					puts "could not find $my_aspectname\_a cannot set admin"
-				}
+				add_user_to_group2 $my_aspectname $new_admin_handle 1
+#				set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $my_aspectid "-m" "ADD" "-u" [lindex [lindex [lindex $my_aspectinfo 3] end] 0]] "Ŋ"]
+#				set getaspectid_answer [split [exec $phantombin "get_aspects.js" "-d" "Ŋ" "Ŋ" "N" "N"] "Ŋ"]
+#				set i 0
+#				while { [lindex $getaspectid_answer $i] != "$my_aspectname\_a" && $i < [llength $getaspectid_answer]} { incr i }					 
+#				if { $i < [llength $getaspectid_answer] } {
+#					set my_adminaspectid [lindex $getaspectid_answer [expr $i - 2]]
+#					set adduser_answer [split [exec $phantombin "change_useraspect.js" "-d" "Ŋ" "Ŋ" "N" "N" "-a" $my_adminaspectid "-m" "ADD" "-u" [lindex [lindex [lindex $my_aspectinfo 3] end] 0]] "Ŋ"]
+#					set my_aspectinfo [add_user_to_group $my_aspectinfo $new_admin_handle 1]
+#					set outputtext "$outputtext\\n* added [lindex [lindex [lindex $my_aspectinfo 3] end] 2] as an admin"
+#				} else {
+#					puts "could not find $my_aspectname\_a cannot set admin"
+#				}
 			}			
 			save_aspectinfo $my_aspectname $my_aspectinfo
 			puts "everything's fine, did what I wanted to do (I think) output is:\n\n$outputtext"
@@ -904,11 +752,8 @@ proc create_group_command { my_command } {
 	set new_aspectname [string range [lindex [regexp -inline -- "\\$groupprefix\\w+" $my_subcommand] 0] 1 end]
 	##set group_exists 0
 	if {[get_aspectid $new_aspectname]} { set group_exists 1 } else { set group_exists 0 }
-	##foreach {nothing1 a_id nothing2 a_name} $aspect_list {
-	##	if { $a_name == $new_aspectname } {
-	##		set group_exists 1
-	##	}
-	##}
+
+
 	if { $new_aspectname == "create"      } { set group_exists 2 }
 	if { $new_aspectname == "found"       } { set group_exists 2 }
 	if { $new_aspectname == "subscribe"   } { set group_exists 2 }
@@ -960,6 +805,280 @@ proc create_group_command { my_command } {
 		set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "$groupprefix$new_aspectname matches a keyword, I will not create that group. Please choose another name."]
 	} elseif { $group_exists == 2 } {
 		set comment_answer [exec $phantombin "post_comment.js" "-p" [lindex $my_command 1] "--" "$groupprefix$new_aspectname is to long, the maximum length for groupnames is 16 characters."]
+	}
+}
+
+proc do_idle_stuff {} {
+	#after doing what to do or after doing nothing the bot can do maintenance stuff
+	global phantombin
+	set random_stuff [expr round(rand() * 4)]
+	puts "random stuff to do: $random_stuff"
+	set group_name [get_random_groupname]
+	if {$random_stuff == 1} {
+		puts "search in $group_name for dublicates"
+		if {[file exists "./aspects/$group_name"]} {
+			set groupfile [open "./aspects/$group_name" r]
+			set group_array [string trim [read $groupfile]]
+			close $groupfile
+			set users_list [lindex $group_array 3]
+			set indicies_to_delete [list]
+			for { set i 0 } { $i < [llength $users_list]} { incr i } {
+				for { set j [expr $i + 1] } { $j < [llength $users_list]} { incr j } {
+					if {[lindex $users_list $i 1] == [lindex $users_list $j 1] || [lindex $users_list $i 3] == [lindex $users_list $j 3]} {
+						lappend indicies_to_delete $j
+					}
+				}
+			}
+			for { set i [expr [llength $indicies_to_delete] -1] } { $i >= 0 } { set i [expr $i - 1] } {
+				puts "removing [lindex $users_list $i 2] from $group_name"
+				set users_list [lreplace $users_list $i $i]
+			}			
+			set group_array [lreplace $group_array 3 3 $users_list]
+			set users_list [lindex $group_array 4]
+			set indicies_to_delete [list]
+			for { set i 0 } { $i < [llength $users_list]} { incr i } {
+				for { set j [expr $i + 1] } { $j < [llength $users_list]} { incr j } {
+					if {[lindex $users_list $i 1] == [lindex $users_list $j 1] || [lindex $users_list $i 3] == [lindex $users_list $j 3]} {
+						lappend indicies_to_delete $j
+					}
+				}
+			}
+			for { set i [expr [llength $indicies_to_delete] -1] } { $i >= 0 } { set i [expr $i - 1] } {
+				puts "removing [lindex $users_list $i 2] from $group_name"
+				set users_list [lreplace $users_list $i $i]
+			}
+			set group_array [lreplace $group_array 4 4 $users_list]
+			
+			set groupfile [open "./aspects/$group_name" w]
+			puts $groupfile $group_array
+			close $groupfile
+		}
+	} elseif {$random_stuff == 2} {
+		puts "Syncing pod and file on $group_name ..."
+		set new_group_name [string trim $group_name]
+		set new_group_id [get_aspectid $new_group_name]
+		set new_group_adminid [get_aspectid "$new_group_name\_a" 1]
+		set new_group_description "-"
+		set new_group_admins [list]
+		set new_group_users [list]
+		set new_group_settings [list 0 0 0]
+		
+		puts "  getting adminlist from server..."
+		if { $new_group_adminid } {
+			set adminlist_from_pod [exec "./phantomjs" "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $new_group_adminid]
+			if {$adminlist_from_pod != "-1"} {
+				puts "        [llength $adminlist_from_pod]"
+				foreach { h_ i_ n_ a_ g_ } $adminlist_from_pod {
+					lappend new_group_admins [list $i_ $g_ $n_ $h_ $a_]
+				}
+			}
+		}
+		puts "  getting userlist from server..."
+		if { $new_group_id } {
+			set userlist_from_pod [exec "./phantomjs" "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $new_group_id]
+			if {$userlist_from_pod != "-1"} {
+				puts "        [llength $userlist_from_pod]"
+				foreach { h_ i_ n_ a_ g_ } $userlist_from_pod {
+					lappend new_group_users [list $i_ $g_ $n_ $h_ $a_]
+				}
+			}			
+		}
+		
+		puts "  getting information from file..."
+		if {[file exists "./aspects/$new_group_name"]} {
+			set groupfile [open "./aspects/$new_group_name" r]
+			set old_user_array [read $groupfile]
+			close $groupfile
+			if {[llength $old_user_array] > 0} {
+				if {$new_group_name != [lindex $old_user_array 0]} {
+					#something ran really really wrong, but just keep the groupname, we'll overwrite the filecontent
+				}
+			}
+			if {[llength $old_user_array] > 1} {
+				if {$new_group_id != [lindex $old_user_array 1]} {
+					if {$new_group_id != [lindex $old_user_array 1 0]} {
+						# group_id on pod differs to the ID in file... I think pod counts XD (except its 0 in that case...)
+						if {$new_group_id == 0} { set new_group_id [lindex $old_user_array 1 0]}
+					}
+				}
+				if {[llength [lindex $old_user_array 1]] > 1} {
+					## there is an admin-aspect-id in the file, let's check this too.
+					if {$new_group_adminid != [lindex $old_user_array 1 1]} {
+						# group_adminid on pod differs to the ID in file... I think pod counts XD (except its 0 in that case...)
+						if {$new_group_adminid == 0} { set new_group_adminid [lindex $old_user_array 1 1]}
+					}
+				}
+			}
+			if {[llength $old_user_array] > 2} {
+				set new_group_description [string trim [lindex $old_user_array 2]]
+			}
+			if {[llength $old_user_array] > 3} {
+				# list of admins...
+				set new_group_admins [concat [lindex $old_user_array 3] $new_group_admins]
+				##remove dublicates...				
+				set indicies_to_delete [list]
+				for { set i 0 } { $i < [llength $new_group_admins]} { incr i } {
+					for { set j [expr $i + 1] } { $j < [llength $new_group_admins]} { incr j } {
+						if {[lindex $new_group_admins $i 1] == [lindex $new_group_admins $j 1] || [lindex $new_group_admins $i 3] == [lindex $new_group_admins $j 3]} {
+							lappend indicies_to_delete $j
+						}
+					}
+				}
+				for { set i [expr [llength $indicies_to_delete] -1] } { $i >= 0 } { set i [expr $i - 1] } {
+					set new_group_admins [lreplace $new_group_admins $i $i]
+				}				
+			}
+			
+			if {[llength $old_user_array] > 4} {
+				# list of admins...
+				set new_group_users [concat [lindex $old_user_array 4] $new_group_users]
+				##remove dublicates...				
+				set indicies_to_delete [list]
+				for { set i 0 } { $i < [llength $new_group_users]} { incr i } {
+					for { set j [expr $i + 1] } { $j < [llength $new_group_users]} { incr j } {
+						if {[lindex $new_group_users $i 1] == [lindex $new_group_users $j 1] || [lindex $new_group_users $i 3] == [lindex $new_group_users $j 3]} {
+							lappend indicies_to_delete $j
+						}
+					}
+				}
+				for { set i [expr [llength $indicies_to_delete] -1] } { $i >= 0 } { set i [expr $i - 1] } {
+					set new_group_users [lreplace $new_group_users $i $i]
+				}				
+			}
+			if {[llength $old_user_array] > 5} {
+				set new_group_settings [lindex $old_user_array 5]				
+			}
+		}
+		
+		puts "  merging data..."
+		
+		set new_group_array [list]
+		lappend new_group_array $new_group_name
+		if {$new_group_adminid > 0} {
+			lappend new_group_array [list $new_group_id $new_group_adminid]
+		} else {
+			lappend new_group_array $new_group_id
+		}
+		lappend new_group_array $new_group_description
+		lappend new_group_array $new_group_admins
+		lappend new_group_array $new_group_users
+		lappend new_group_array $new_group_settings		
+		
+		puts "  saving to file..."
+		set groupfile [open "./aspects/$new_group_name" w]
+		puts $groupfile $new_group_array
+		close $groupfile
+		
+		## aaand do on pod:
+		# create aspect if not exists
+		puts "  saving on pod..."
+		set aspect_creation_answer [get_aspectid $new_group_name 1]
+		puts "         ...user aspect"
+		if { $aspect_creation_answer == 0} {
+			set aspect_creation_answer [exec $phantombin "create_aspect.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" "$new_group_name"]
+		}
+		# add subscriber
+		puts "         ...users"
+		if {[regexp {^\d+$} $aspect_creation_answer] > 0} {
+			for {set i 0 } { $i < [llength $new_group_users] } {incr i} {
+				puts "                 [lindex $new_group_users $i 3]"
+				set user_adding_answer [exec $phantombin "change_useraspect.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_creation_answer "-m" "ADD" "-u" [lindex $new_group_users $i 0]]
+			}
+		}
+
+		# create admin-aspect if not exists
+		# add admins
+		puts "         ...admin aspect"
+		set aspect_creation_answer [get_aspectid "$new_group_name\_a" 1]
+		if { $aspect_creation_answer == 0} {
+			set aspect_creation_answer [exec $phantombin "create_aspect.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" "$new_group_name\_a"]
+		}
+		puts "         ...admins"
+		if {[regexp {^\d+$} $aspect_creation_answer] > 0} {
+			for {set i 0 } { $i < [llength $new_group_admins] } {incr i} {
+				puts "                 [lindex $new_group_admins $i 2]"
+				set user_adding_answer [exec $phantombin "change_useraspect.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" $aspect_creation_answer "-m" "ADD" "-u" [lindex $new_group_admins $i 0]]
+			}
+		}
+		
+	} elseif {$random_stuff == 3} {
+		puts "Check for zero admins/users in $group_name"
+		if {[file exists "./aspects/$group_name"]} {
+			set groupfile [open "./aspects/$group_name" r]
+			set group_array [string trim [read $groupfile]]
+			close $groupfile
+			
+			if {[llength [lindex $group_array 3]] == 0} {
+				puts "   no admin, check for admins on pod..."
+				if {[llength [lindex $group_array 1]] >= 2} {
+					set adminlist_from_pod [exec "./phantomjs" "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" [lindex $group_array 1 1]]
+					if {$adminlist_from_pod != "-1"} {
+						foreach { h_ i_ n_ a_ g_ } $adminlist_from_pod {
+							lappend [lindex $group_array 3] [list $i_ $g_ $n_ $h_ $a_]
+						}
+					}
+				}
+			} else { puts "   admin found, everything's fine" }
+			
+			if {[llength [lindex $group_array 3]] == 0} {
+				puts "   no admin in file or pod, taking a user..."
+				#still no admin, get one from users list.
+				if {[llength [lindex $group_array 4]] == 0} {
+					#no admins no users? check the pod!
+					set userlist_from_pod [exec "./phantomjs" "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" [lindex $group_array 1 0]]
+					if {$userlist_from_pod != "-1"} {
+						foreach { h_ i_ n_ a_ g_ } $userlist_from_pod {
+							lappend [lindex $group_array 4] [list $i_ $g_ $n_ $h_ $a_]
+						}
+						puts "   found user on pod, adding as an admin"
+						lappend [lindex $group_array 3] [lindex $group_array 4 0]
+					}
+				} else {
+					puts "   found user in file, adding as an admin"
+					set admins_list [lindex $group_array 3]
+					lappend admins_list [lindex $group_array 4 0]
+					set group_array [lreplace $group_array 3 3 $admins_list]
+				}
+			}
+			if {[llength [lindex $group_array 3]] || [llength [lindex $group_array 4]]} {
+				#okay, there are admins and/or userer (usually both), so just save the stuff...
+				set groupfile [open "./aspects/$group_name" w]
+				puts $groupfile $group_array
+				close $groupfile
+			} else {
+				## remove group…
+				set remove_aspect_answer [exec "./phantomjs" "delete_aspect.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" [lindex $group_array 1 0]]				
+				set remove_aspect_answer [exec "./phantomjs" "delete_aspect.js" "-d" "\{" "\} " "\\\{" "\\\} " "-a" [lindex $group_array 1 1]]
+				if {[file exists "./aspects/$group_name"]} {
+					file delete "./aspects/$group_name"
+				}
+			}
+		}
+	}
+}
+
+proc get_random_groupname {{source_type 0}} {
+	##returns a random groupname
+	## source_type = 0; no matter the source of the group
+	## source_type = 1; from file
+	## source_type = 2; from pod
+	if {$source_type == 0} { set source_type [expr int(rand() * 2 +1)] }
+	if {$source_type == 1} {
+		set group_list [glob -directory "./aspects" *]
+		set group_name [lindex [split [lindex $group_list [expr int(rand() * [llength $group_list])]] "/"] 2]
+		if {[regexp {^\d+$} $group_name]} {
+			set groupfile [open "./aspects/$group_name" r]
+			set group_name [string trim [read $groupfile]]
+			close $groupfile
+		}
+		return $group_name
+	} elseif {$source_type == 2} {
+		set group_list [exec "./phantomjs" "get_aspects.js" "-d" "\{" "\} " "\\\{" "\\\} "]
+		set group_name [lindex $group_list [expr int(rand() * [llength $group_list])]]
+		while {[regexp {^\d+$} $group_name] || [regexp {_a$} $group_name] || $group_name == "users" || $group_name == "admins"} {
+			set group_name [lindex $group_list [expr int(rand() * [llength $group_list])]]
+		}
+		return $group_name
 	}
 }
 
@@ -1024,6 +1143,7 @@ proc main {} {
 			}
 		}
 	}
+	do_idle_stuff
 	if {$checkfrequency} {
 		puts "now waiting [expr $checkfrequency / 1000] seconds..."
 		after [expr $checkfrequency * 1  / 2] { puts [expr $checkfrequency / 2000 ]}
